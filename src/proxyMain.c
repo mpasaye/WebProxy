@@ -97,6 +97,9 @@ int main (int argc, char** argv) {
     polls[0].fd = listensfd;
     polls[0].events = POLLIN; // Want to wait till there is data from accept
 
+    // Initializing SSL Library
+    SSL_library_init ();
+
     // For loop to constantly process accept calls
     for (;;) {
         // Watching for events
