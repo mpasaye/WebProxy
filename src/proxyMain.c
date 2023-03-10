@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <poll.h>
+#include <unistd.h>
 
 // DEFINE STATEMENTS
 
@@ -82,19 +83,29 @@ int main (int argc, char** argv) {
 
     // For loop to constantly process accept calls
     for (;;) {
-        // Structure for connection
-        struct sockaddr_in conn;
-        socklen_t connlen = sizeof (conn);
-        conn.sin_family = AF_INET;
+        // Watching for events
+        if ( (poll (polls, 1, -1)) < 0 ) {
+            fprintf (stderr, "Poll had an error\n");
+            close (listensfd);
+            exit (1);
+        }
+
+        if (polls[0].revents & POLLIN) {
+            // Structure for client
+            struct sockaddr_in cli;
+            socklen_t clilen = sizeof (cli);
+            cli.sin_family= AF_INET;
+
+            // Accepting new connection
+            int connsfd = accept (listensfd, (struct sockaddr*) &cli, &clilen);
+
+            // Create argument for thread
+            struct tdinfo tdata;
+            tdata.sfd = connsfd;
+            tdata.log = logpth;
+            tdata.forb = forblst;
+        }
         
-        // Accepting incoming connectiong
-        int connsfd = accept (listensfd, (struct sockaddr*) &conn, &connlen); 
-        
-        // Need to dispath thread to continue communication
-        struct tdinfo tdata;
-        tdata.sfd = connsfd;
-        tdata.log = logpth;
-        tdata.forb = forblst;
     }
 
 }
