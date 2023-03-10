@@ -28,6 +28,7 @@ struct tdinfo {
 // THREAD FUNCTION
 void *cliwrk (void* args) {
     struct tdinfo *targs = (struct tdinfo*) args; 
+    fprintf (stdout, "sfd: %d\nlog: %s\nforb: %s\n", targs -> sfd, targs -> log, targs -> forb);
     return 0;
 }
 
@@ -97,6 +98,7 @@ int main (int argc, char** argv) {
             exit (1);
         }
 
+        // Poll found an event
         if (polls[0].revents & POLLIN) {
             // Structure for client
             struct sockaddr_in cli;
@@ -119,7 +121,5 @@ int main (int argc, char** argv) {
                 exit (1);
             } pthread_join (td, NULL);
         }
-        
     }
-
 }
