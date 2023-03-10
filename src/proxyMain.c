@@ -69,5 +69,17 @@ int main (int argc, char** argv) {
         exit (1);
     }
 
+    // For loop to constantly process accept calls
+    for (;;) {
+        // Structure for connection
+        struct sockaddr_in conn;
+        socklen_t connlen = sizeof (conn);
+        conn.sin_family = AF_INET;
+        
+        // Accepting incoming connectiong
+        int connsfd = accept (listensfd, (struct sockaddr*) &conn, &connlen); 
+
+        // Need to dispath thread to continue communication
+    }
 
 }
