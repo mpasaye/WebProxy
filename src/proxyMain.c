@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <unistd.h>
+#include <pthread.h>
 
 // DEFINE STATEMENTS
 
@@ -23,6 +24,12 @@ struct tdinfo {
     char* log;
     char* forb;
 };
+
+// THREAD FUNCTION
+void *cliwrk (void* args) {
+    struct tdinfo *targs = (struct tdinfo*) args; 
+    return 0;
+}
 
 int main (int argc, char** argv) {
     int i = argc - 1;
@@ -104,6 +111,13 @@ int main (int argc, char** argv) {
             tdata.sfd = connsfd;
             tdata.log = logpth;
             tdata.forb = forblst;
+
+            // Creating and Deploying thread
+            pthread_t td;
+            if ( (pthread_create (&td, NULL, &cliwrk, (void*) &tdata)) < 0 ) {
+                fprintf (stderr, "Error creating thread\n");
+                exit (1);
+            } pthread_join (td, NULL);
         }
         
     }
