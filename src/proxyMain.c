@@ -13,6 +13,9 @@
 #include <poll.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 // DEFINE STATEMENTS
 #define MAXLINE 1024
