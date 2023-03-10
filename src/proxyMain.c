@@ -37,5 +37,24 @@ int main (int argc, char** argv) {
         }
     }
 
+    // Need to set up listening port
+    // to process HTTP requests I think
+    // this can be a TCP socket
+
+    // Creating struct for listening socket
+    struct sockaddr_in listen;
+    socklen_t listenlen = sizeof (listen);
+    listen.sin_family = AF_INET; // Using IPV4 & IPV6
+    listen.sin_port = htons (port);
+    listen.sin_addr.s_addr = htonl (INADDR_ANY); // Binding on all interfaces
+
+
+    // Creating listening socket
+    int listensfd;
+    if ( (listensfd = socket (AF_INET, SOCK_STREAM, 0)) < 0 ) {
+        fprintf (stderr, "Failed to create listening socket\n");
+        exit (1);
+    }
+
     
 }
