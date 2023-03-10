@@ -15,6 +15,7 @@
 #include <pthread.h>
 
 // DEFINE STATEMENTS
+#define MAXLINE 1024
 
 // GLOBAL VARIABLES
 
@@ -28,7 +29,15 @@ struct tdinfo {
 // THREAD FUNCTION
 void *cliwrk (void* args) {
     struct tdinfo *targs = (struct tdinfo*) args; 
-    fprintf (stdout, "sfd: %d\nlog: %s\nforb: %s\n", targs -> sfd, targs -> log, targs -> forb);
+    
+    // Read the data from the socket
+    char msg [MAXLINE];
+    if ( (recv (targs -> sfd, msg, MAXLINE, 0)) < 0 ) {
+        fprintf (stderr, "Recieve error\n");
+        return 0;
+    }
+    fprintf (stderr, "recv: %s\n", msg);
+
     return 0;
 }
 
@@ -53,10 +62,6 @@ int main (int argc, char** argv) {
             exit (1);
         }
     }
-
-    // Need to set up listening port
-    // to process HTTP requests I think
-    // this can be a TCP socket
 
     // Creating struct for listening socket
     struct sockaddr_in local;
@@ -119,7 +124,7 @@ int main (int argc, char** argv) {
             if ( (pthread_create (&td, NULL, &cliwrk, (void*) &tdata)) < 0 ) {
                 fprintf (stderr, "Error creating thread\n");
                 exit (1);
-            } pthread_join (td, NULL);
+            } pthread_detach (td);
         }
     }
 }
