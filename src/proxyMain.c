@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 // DEFINE STATEMENTS
 
@@ -42,19 +44,30 @@ int main (int argc, char** argv) {
     // this can be a TCP socket
 
     // Creating struct for listening socket
-    struct sockaddr_in listen;
-    socklen_t listenlen = sizeof (listen);
-    listen.sin_family = AF_INET; // Using IPV4 & IPV6
-    listen.sin_port = htons (port);
-    listen.sin_addr.s_addr = htonl (INADDR_ANY); // Binding on all interfaces
+    struct sockaddr_in local;
+    socklen_t locallen = sizeof (local);
+    local.sin_family = AF_INET; // Using IPV4 & IPV6
+    local.sin_port = htons (port);
+    local.sin_addr.s_addr = htonl (INADDR_ANY); // Binding on all interfaces
 
-
-    // Creating listening socket
+    // Creating listening socket using TCP
     int listensfd;
     if ( (listensfd = socket (AF_INET, SOCK_STREAM, 0)) < 0 ) {
         fprintf (stderr, "Failed to create listening socket\n");
         exit (1);
     }
 
-    
+    // Binding socket to local address and port
+    if ( (bind (listensfd, (struct sockaddr*) &local, locallen)) < 0 ) {
+        fprintf (stderr, "Failed to bind socket to local address\n");
+        exit (1);
+    }
+
+    // Ensure the socket is listening
+    if ( (listen (listensfd, 128)) < 0 ) {
+        fprintf (stderr, "Failed to listen on socket\n");
+        exit (1);
+    }
+
+
 }
