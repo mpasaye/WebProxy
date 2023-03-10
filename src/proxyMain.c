@@ -10,12 +10,18 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <poll.h>
 
 // DEFINE STATEMENTS
 
 // GLOBAL VARIABLES
 
 // STRUCTS
+struct tdinfo {
+    int sfd;
+    char* log;
+    char* forb;
+};
 
 int main (int argc, char** argv) {
     int i = argc - 1;
@@ -69,6 +75,11 @@ int main (int argc, char** argv) {
         exit (1);
     }
 
+    // Poll struct to catch when accept has an event
+    struct pollfd polls[1];
+    polls[0].fd = listensfd;
+    polls[0].events = POLLIN; // Want to wait till there is data from accept
+
     // For loop to constantly process accept calls
     for (;;) {
         // Structure for connection
@@ -78,8 +89,12 @@ int main (int argc, char** argv) {
         
         // Accepting incoming connectiong
         int connsfd = accept (listensfd, (struct sockaddr*) &conn, &connlen); 
-
+        
         // Need to dispath thread to continue communication
+        struct tdinfo tdata;
+        tdata.sfd = connsfd;
+        tdata.log = logpth;
+        tdata.forb = forblst;
     }
 
 }
