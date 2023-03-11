@@ -27,19 +27,32 @@ struct tdinfo {
     int sfd;
     char* log;
     char* forb;
+    SSL_CTX* ctx;
 };
 
 // THREAD FUNCTION
 void *cliwrk (void* args) {
     struct tdinfo *targs = (struct tdinfo*) args; 
     
-    // Read the data from the socket
+    // Read initial request from client
     char msg [MAXLINE];
     if ( (recv (targs -> sfd, msg, MAXLINE, 0)) < 0 ) {
         fprintf (stderr, "Recieve error\n");
         return 0;
     }
-    fprintf (stderr, "recv: %s\n", msg);
+
+    // Need another socket to communicate to the web server
+    SSL* ssl = SSL_new (targs -> ctx);
+    int sslfd; 
+    
+    // Creating socket
+    if ( (sslfd = socket (AF_INET, SOCK_STREAM, 0)) < 0 ) {
+        fprintf (stderr, "Failure creating ssl socket\n");
+        exit (1);
+    }
+
+    // Attaching SSL object to socket
+    SSL_set_fd (ssl, sslfd);
 
     return 0;
 }
@@ -102,7 +115,6 @@ int main (int argc, char** argv) {
     SSL_load_error_strings ();
     const SSL_METHOD* meth = SSLv23_client_method ();
     SSL_CTX* ctx = SSL_CTX_new (meth);
-    SSL* ssl = SSL_new (ctx);
 
     // For loop to constantly process accept calls
     for (;;) {
@@ -128,6 +140,7 @@ int main (int argc, char** argv) {
             tdata.sfd = connsfd;
             tdata.log = logpth;
             tdata.forb = forblst;
+            tdata.ctx = ctx;
 
             // Creating and Deploying thread
             pthread_t td;
