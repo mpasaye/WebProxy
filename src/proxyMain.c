@@ -99,6 +99,10 @@ int main (int argc, char** argv) {
 
     // Initializing SSL Library
     SSL_library_init ();
+    SSL_load_error_strings ();
+    const SSL_METHOD* meth = SSLv23_client_method ();
+    SSL_CTX* ctx = SSL_CTX_new (meth);
+    SSL* ssl = SSL_new (ctx);
 
     // For loop to constantly process accept calls
     for (;;) {
