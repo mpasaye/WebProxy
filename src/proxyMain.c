@@ -30,34 +30,121 @@ struct tdinfo {
     SSL_CTX* ctx;
 };
 
+// HELPER FUNCTIONS
+int reqParse (char *req, char *uri, int *port) {
+    // Want to read Request-Line
+    // to determine if valid method
+    // and if host is not on forbidden list
+    int i = 0;
+    while ( req[i] != '\n' ) {
+        i++;
+    }
+    char *reqln = (char*) malloc (i + 1);
+    memcpy (reqln, req, i);
+    
+    i = 0;
+    while ( reqln[i] != ' ' ) {
+        i++;
+    }
+    
+    char *meth = (char*) malloc ( i + 1 );
+    memcpy (meth, reqln, i);
+
+    // Checking if method is valid
+    if ( strcmp (meth, "GET") ) {
+        printf ("method was not get: %s\n", meth);
+        if ( strcmp (meth, "HEAD") ) {
+            printf ("method was not head: %s\n", meth);
+            free (meth);
+            free (reqln);
+            return 1; 
+        }
+    }
+
+    // Retrieving Request-URI
+    i += 1;
+    int j = i;
+    while ( req[i] != ' ' ) {
+        i++;
+    } i = i-j;
+    memcpy (uri, &(req[j]), i);
+
+    // Find port
+    char *ptr = strrchr (&(uri[7]), ':');
+    if ( ptr == NULL ) {
+        printf ("hello\n");
+        *port = 443; 
+    } else {
+        i = 0;
+        while ( ptr[i] != '/' ) {
+            i++;
+        }
+        char *num = (char*) malloc (i);
+        memcpy (num, &(ptr[1]), i - 1);
+        *port = atoi (num);
+        free (num);
+    }
+
+    free (reqln);
+    free (meth);
+    return 0; 
+}
+
 // THREAD FUNCTION
 void *cliwrk (void* args) {
+    // Thread should not close listening socket
+    // but for now, I will do this so the port is
+    // freed during testing
+    
     struct tdinfo *targs = (struct tdinfo*) args; 
     
     // Read initial request from client
-    char msg [MAXLINE];
-    if ( (recv (targs -> sfd, msg, MAXLINE, 0)) < 0 ) {
+    char req [MAXLINE];
+    if ( (recv (targs -> sfd, req, MAXLINE, 0)) < 0 ) {
         fprintf (stderr, "Recieve error\n");
+        close (targs -> sfd);
         return 0;
     }
 
-    // Need another socket to communicate to the web server
+    printf ("%s", req);
+
+    // Checking to see if method is supported
+    char uri [64] = {0};
+    int port;
+    if ( reqParse (req, uri, &port) ) {
+        close (targs -> sfd);
+        return 0;
+    }
+    
+    printf ("uri: %s\nport: %d\n", uri, port);
+    // Creating SSL socket to forward HTTP request
     SSL* ssl = SSL_new (targs -> ctx);
     int sslfd; 
     
     // Creating socket
     if ( (sslfd = socket (AF_INET, SOCK_STREAM, 0)) < 0 ) {
         fprintf (stderr, "Failure creating ssl socket\n");
-        exit (1);
+        return 0;
     }
 
     // Attaching SSL object to socket
     SSL_set_fd (ssl, sslfd);
 
+    close (targs -> sfd);
+    close (sslfd);
     return 0;
 }
 
+// MAIN FUNCTIONS
 int main (int argc, char** argv) {
+    if (argc < 4) {
+        fprintf (stderr, "Missing arguments\n");
+        exit (1);
+    } else if (argc > 4) {
+        fprintf (stderr, "Too many arguments\n");
+        exit (1);
+    }
+
     int i = argc - 1;
 
     // Copying over the path to the log file
@@ -146,6 +233,8 @@ int main (int argc, char** argv) {
             pthread_t td;
             if ( (pthread_create (&td, NULL, &cliwrk, (void*) &tdata)) < 0 ) {
                 fprintf (stderr, "Error creating thread\n");
+                close (listensfd);
+                close (connsfd);
                 exit (1);
             } pthread_detach (td);
         }
