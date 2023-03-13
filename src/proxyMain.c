@@ -31,7 +31,7 @@ struct tdinfo {
 };
 
 // HELPER FUNCTIONS
-int reqParse (char *req, char *uri, int *port) {
+int reqParse (char *req, char *meth, char *host, int *port) {
     // Want to read Request-Line
     // to determine if valid method
     // and if host is not on forbidden list
@@ -39,6 +39,7 @@ int reqParse (char *req, char *uri, int *port) {
     while ( req[i] != '\n' ) {
         i++;
     }
+
     char *reqln = (char*) malloc (i + 1);
     memcpy (reqln, req, i);
     
@@ -46,8 +47,6 @@ int reqParse (char *req, char *uri, int *port) {
     while ( reqln[i] != ' ' ) {
         i++;
     }
-    
-    char *meth = (char*) malloc ( i + 1 );
     memcpy (meth, reqln, i);
 
     // Checking if method is valid
@@ -67,12 +66,13 @@ int reqParse (char *req, char *uri, int *port) {
     while ( req[i] != ' ' ) {
         i++;
     } i = i-j;
+    char *uri = (char*) malloc (i);
     memcpy (uri, &(req[j]), i);
 
     // Find port
     char *ptr = strrchr (&(uri[7]), ':');
     if ( ptr == NULL ) {
-        printf ("hello\n");
+        memcpy (host, uri, strlen (uri));
         *port = 443; 
     } else {
         i = 0;
@@ -82,11 +82,19 @@ int reqParse (char *req, char *uri, int *port) {
         char *num = (char*) malloc (i);
         memcpy (num, &(ptr[1]), i - 1);
         *port = atoi (num);
+
+        // Need to remove the port from the uri
+        i = 7;
+        while ( uri [i] != ':' ) {
+            i++;
+        }
+        memcpy (host, uri, i + 7);
+
         free (num);
     }
 
+    free (uri);
     free (reqln);
-    free (meth);
     return 0; 
 }
 
@@ -110,13 +118,20 @@ void *cliwrk (void* args) {
 
     // Checking to see if method is supported
     char uri [64] = {0};
+    char meth [10] = {0};
     int port;
-    if ( reqParse (req, uri, &port) ) {
+    if ( reqParse (req, meth, uri, &port) ) {
+        // Need to send a a 501 HTTP Error
         close (targs -> sfd);
         return 0;
     }
-    
-    printf ("uri: %s\nport: %d\n", uri, port);
+
+    printf ("meth: %s\nuri: %s\nport: %d\n", meth, uri, port);
+    // New HTTP Request
+    char nreq [128] = {0};
+    sprintf (nreq, "%s %s:%d HTTP/1.1\r\n\r\n", meth, uri, port);
+    printf ("nreq: %s", nreq);
+
     // Creating SSL socket to forward HTTP request
     SSL* ssl = SSL_new (targs -> ctx);
     int sslfd; 
