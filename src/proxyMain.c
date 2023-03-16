@@ -40,60 +40,23 @@ int reqParse (char *req, char *meth, char *host, int *port) {
         i++;
     }
 
-    char *reqln = (char*) malloc (i + 1);
-    memcpy (reqln, req, i);
+    // Retrieved the request line
+    char *req = (char*) malloc (i + 1);
+    memcpy (req, req, i);
+    char *reqog = (char*) malloc (i + 1);
+    memcpy (reqog, req, i);
     
-    i = 0;
-    while ( reqln[i] != ' ' ) {
-        i++;
-    }
-    memcpy (meth, reqln, i);
-
-    // Checking if method is valid
-    if ( strcmp (meth, "GET") ) {
-        printf ("method was not get: %s\n", meth);
-        if ( strcmp (meth, "HEAD") ) {
-            printf ("method was not head: %s\n", meth);
-            free (meth);
-            free (reqln);
-            return 1; 
-        }
+    char *tok[3] =  {" ", " ", "\r\n\r\n"};
+    char *keys [3];
+    // Parse the Request-Line
+    for (int i = 0; i < 3; i++) {
+       keys [i] = strtok_r (req, tok [i], reqo); 
     }
 
-    // Retrieving Request-URI
-    i += 1;
-    int j = i;
-    while ( req[i] != ' ' ) {
-        i++;
-    } i = i-j;
-    char *uri = (char*) malloc (i);
-    memcpy (uri, &(req[j]), i);
-
-    // Find port
-    char *ptr = strrchr (&(uri[7]), ':');
-    if ( ptr == NULL ) {
-        memcpy (host, uri, strlen (uri));
-        *port = 443; 
-    } else {
-        i = 0;
-        while ( ptr[i] != '/' ) {
-            i++;
-        }
-        char *num = (char*) malloc (i);
-        memcpy (num, &(ptr[1]), i - 1);
-        *port = atoi (num);
-
-        // Need to remove the port from the uri
-        i = 7;
-        while ( uri [i] != ':' ) {
-            i++;
-        }
-        memcpy (host, uri, i + 7);
-
-        free (num);
+    for (int i = 0; i < 3; i++) {
+        printf ("key %d: %s\n", i, keys [i]);
     }
 
-    free (uri);
     free (reqln);
     return 0; 
 }
@@ -126,7 +89,7 @@ void *cliwrk (void* args) {
         return 0;
     }
 
-    printf ("meth: %s\nuri: %s\nport: %d\n", meth, uri, port);
+    printf ("meth: %s\nhost: %s\nport: %d\n", meth, uri, port);
     // New HTTP Request
     char nreq [128] = {0};
     sprintf (nreq, "%s %s:%d HTTP/1.1\r\n\r\n", meth, uri, port);
