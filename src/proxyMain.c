@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <netdb.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <poll.h>
@@ -19,6 +21,7 @@
 
 // DEFINE STATEMENTS
 #define MAXLINE 1024
+#define HTTP 7 // Count of characters for dest
 
 // GLOBAL VARIABLES
 
@@ -31,7 +34,7 @@ struct tdinfo {
 };
 
 // HELPER FUNCTIONS
-int reqParse (char *req, char *meth, char *host, int *port) {
+int reqParse (char *req, char* uri, int *port) {
     // Want to read Request-Line
     // to determine if valid method
     // and if host is not on forbidden list
@@ -39,25 +42,43 @@ int reqParse (char *req, char *meth, char *host, int *port) {
     while ( req[i] != '\n' ) {
         i++;
     }
+    char *reqln = (char*) malloc (i);
+    memcpy (reqln, req, i);
 
-    // Retrieved the request line
-    char *req = (char*) malloc (i + 1);
-    memcpy (req, req, i);
-    char *reqog = (char*) malloc (i + 1);
-    memcpy (reqog, req, i);
-    
-    char *tok[3] =  {" ", " ", "\r\n\r\n"};
-    char *keys [3];
-    // Parse the Request-Line
-    for (int i = 0; i < 3; i++) {
-       keys [i] = strtok_r (req, tok [i], reqo); 
+    // Retrieve method
+    i = 0;
+    while ( req[i] != ' ' ) {
+       i++; 
     }
+    char *meth = (char*) malloc (i);
+    memcpy (meth, reqln, i);
 
-    for (int i = 0; i < 3; i++) {
-        printf ("key %d: %s\n", i, keys [i]);
+    // Retrieve URI
+    i++;
+    int j = i;
+
+    while ( req[i] != ' ' ) {
+        i++;
+    }
+    memcpy (uri, &(req[j + HTTP]), i - j - HTTP - 1);
+    uri [i - j - HTTP - 1] = '\0';
+    char *colon;
+    colon = strrchr (&(uri[7]), ':');
+    if ( colon != NULL ) {
+        // Retrieve port
+        i = 0;
+        while ( colon[i] != '/' ) {
+            i++;
+        }
+        char *portnum = (char*) malloc (i);
+        memcpy (portnum, &(colon[1]), i - 1);
+        *port = atoi (portnum);
+    } else {
+        *port = 443;
     }
 
     free (reqln);
+    free (meth);
     return 0; 
 }
 
@@ -71,42 +92,82 @@ void *cliwrk (void* args) {
     
     // Read initial request from client
     char req [MAXLINE];
-    if ( (recv (targs -> sfd, req, MAXLINE, 0)) < 0 ) {
+    int brcv;
+    if ( (brcv = recv (targs -> sfd, req, MAXLINE, 0)) < 0 ) {
         fprintf (stderr, "Recieve error\n");
         close (targs -> sfd);
-        return 0;
+        pthread_cancel (pthread_self ());
     }
 
     printf ("%s", req);
 
     // Checking to see if method is supported
     char uri [64] = {0};
-    char meth [10] = {0};
     int port;
-    if ( reqParse (req, meth, uri, &port) ) {
+    if ( reqParse (req, uri, &port) ) {
         // Need to send a a 501 HTTP Error
         close (targs -> sfd);
-        return 0;
+        pthread_cancel (pthread_self ());
     }
 
-    printf ("meth: %s\nhost: %s\nport: %d\n", meth, uri, port);
-    // New HTTP Request
-    char nreq [128] = {0};
-    sprintf (nreq, "%s %s:%d HTTP/1.1\r\n\r\n", meth, uri, port);
-    printf ("nreq: %s", nreq);
+    // DNS lookup
+    struct addrinfo hints, *res;
+    memset (&hints, 0, sizeof (hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_canonname = NULL;
+    hints.ai_addr = NULL;
+    hints.ai_next = NULL;
 
-    // Creating SSL socket to forward HTTP request
+    int s = getaddrinfo (uri, "https", &hints, &res);
+    if ( s != 0 ) {
+        fprintf (stderr, "Failed to resolve IP address: %d\n", s);
+        pthread_cancel (pthread_self ());
+    }
+
     SSL* ssl = SSL_new (targs -> ctx);
-    int sslfd; 
-    
-    // Creating socket
-    if ( (sslfd = socket (AF_INET, SOCK_STREAM, 0)) < 0 ) {
-        fprintf (stderr, "Failure creating ssl socket\n");
-        return 0;
+    int sslfd;
+    struct addrinfo *addr;
+    for ( addr = res; addr != NULL; addr = addr -> ai_next ) {
+        if ( (sslfd = socket (addr -> ai_family, addr -> ai_socktype, addr -> ai_protocol)) < 0 ) {
+            continue;
+        }
+
+        if ( (SSL_set_fd (ssl, sslfd)) == 0 ) {
+            continue;
+        }
+
+        if ( (connect (sslfd, addr -> ai_addr, addr -> ai_addrlen)) == 0 ) {
+            if ( (SSL_connect (ssl)) == 1 ) {
+                break;
+            }
+            break;
+        }
+    }
+    freeaddrinfo (res);
+
+    // Send request of SSL socket
+    int bsnd;
+    if ( (bsnd = SSL_write (ssl, req, brcv)) < 0 ) {
+        fprintf (stderr, "Failed to send request over the ssl socket\n");
+        pthread_cancel (pthread_self ());
     }
 
-    // Attaching SSL object to socket
-    SSL_set_fd (ssl, sslfd);
+    char sslrep [MAXLINE] = {0};
+    if ( (brcv = SSL_read (ssl, sslrep, MAXLINE)) < 0 ) {
+        fprintf (stderr, "Failed to recieve over the ssl socket\n");
+        pthread_cancel (pthread_self ());
+    }
+    
+    // Need to send the content
+    // of the response not the header
+    
+    if ( (bsnd = send (targs -> sfd, sslrep, bsnd, 0)) < 0 ) {
+        fprintf (stderr, "Failed to send to the client\n");
+        pthread_cancel (pthread_self ());
+    }
 
     close (targs -> sfd);
     close (sslfd);
